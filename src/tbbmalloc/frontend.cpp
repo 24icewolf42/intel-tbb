@@ -1895,6 +1895,25 @@ void AllocControlledMode::initReadEnv(const char *envName, intptr_t defaultVal)
     }
 }
 
+
+#if (_WIN32 || _WIN64)
+static bool Win32EnablePrivilege(TCHAR* pszPrivilege) {
+	HANDLE      hToken;
+	TOKEN_PRIVILEGES tp;
+	BOOL       status;
+	DWORD      error;
+
+	OpenProcessToken(GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, &hToken);
+	LookupPrivilegeValueA(NULL, pszPrivilege, &tp.Privileges[0].Luid);
+	tp.PrivilegeCount = 1;
+	tp.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
+	status = AdjustTokenPrivileges(hToken, FALSE, &tp, 0, (PTOKEN_PRIVILEGES)NULL, 0);
+	error = GetLastError();
+	CloseHandle(hToken);
+	return (error == ERROR_SUCCESS?true:false);
+}
+#endif
+
 void MemoryPool::initDefaultPool()
 {
     long long unsigned hugePageSize = 0;
@@ -1913,6 +1932,12 @@ void MemoryPool::initDefaultPool()
         }
         fclose(f);
     }
+#elif (_WIN32 || _WIN64)
+	if(Win32EnablePrivilege("SeLockMemoryPrivilege") == true){
+		hugePageSize = (long long unsigned)GetLargePageMinimum();
+	}else{
+		TRACEF("[ScalableMalloc trace] Can't get SeLockmemoryPrivilege, Huge Page Support won't be available.");
+	}
 #endif
     hugePages.init(hugePageSize);
 }
@@ -3131,7 +3156,7 @@ extern "C" int scalable_allocation_mode(int param, intptr_t value)
         defaultMemPool->extMemPool.backend.setRecommendedMaxSize((size_t)value);
         return TBBMALLOC_OK;
     } else if (param == USE_HUGE_PAGES) {
-#if __linux__
+
         switch (value) {
         case 0:
         case 1:
@@ -3140,9 +3165,7 @@ extern "C" int scalable_allocation_mode(int param, intptr_t value)
         default:
             return TBBMALLOC_INVALID_PARAM;
         }
-#else
-        return TBBMALLOC_NO_EFFECT;
-#endif
+
 #if __TBB_SOURCE_DIRECTLY_INCLUDED
     } else if (param == TBBMALLOC_INTERNAL_SOURCE_INCLUDED) {
         switch (value) {

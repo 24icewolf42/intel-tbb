@@ -86,10 +86,11 @@ int UnmapMemory(void *area, size_t bytes)
 #include <windows.h>
 
 #define MEMORY_MAPPING_USES_MALLOC 0
-void* MapMemory (size_t bytes, bool)
+void* MapMemory (size_t bytes, bool hugePages)
 {
     /* Is VirtualAlloc thread safe? */
-    return VirtualAlloc(NULL, bytes, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+	int addFlags = hugePages ? MEM_LARGE_PAGES : 0;
+    return VirtualAlloc(NULL, bytes, MEM_RESERVE | MEM_COMMIT | addFlags, PAGE_READWRITE);
 }
 
 int UnmapMemory(void *area, size_t /*bytes*/)
